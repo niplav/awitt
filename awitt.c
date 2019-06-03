@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <err.h>
 #include <getopt.h>
+#include <time.h>
 #include <xcb/xcb.h>
 
 #include "arg.h"
@@ -44,8 +45,6 @@ void usage(char*);
 void list_events(void);
 void handle_events(void);
 void register_events(xcb_window_t, uint32_t);
-xcb_window_t get_window_id(xcb_generic_event_t*);
-int motherfuckingenterevent(xcb_generic_event_t*);
 
 void
 init_xcb(xcb_connection_t **con)
@@ -98,154 +97,12 @@ usage(char *name)
 }
 
 void
-list_events(void)
-{
-	printf(
-		"XCB_EVENT_MASK_NO_EVENT .............. 0\n"
-		"XCB_EVENT_MASK_KEY_PRESS ............. 1\n"
-		"XCB_EVENT_MASK_KEY_RELEASE ........... 2\n"
-		"XCB_EVENT_MASK_BUTTON_PRESS .......... 4\n"
-		"XCB_EVENT_MASK_BUTTON_RELEASE ........ 8\n"
-		"XCB_EVENT_MASK_ENTER_WINDOW .......... 16\n"
-		"XCB_EVENT_MASK_LEAVE_WINDOW .......... 32\n"
-		"XCB_EVENT_MASK_POINTER_MOTION ........ 64\n"
-		"XCB_EVENT_MASK_POINTER_MOTION_HINT ... 128\n"
-		"XCB_EVENT_MASK_BUTTON_1_MOTION ....... 256\n"
-		"XCB_EVENT_MASK_BUTTON_2_MOTION ....... 512\n"
-		"XCB_EVENT_MASK_BUTTON_3_MOTION ....... 1024\n"
-		"XCB_EVENT_MASK_BUTTON_4_MOTION ....... 2048\n"
-		"XCB_EVENT_MASK_BUTTON_5_MOTION ....... 4096\n"
-		"XCB_EVENT_MASK_BUTTON_MOTION ......... 8192\n"
-		"XCB_EVENT_MASK_KEYMAP_STATE .......... 16384\n"
-		"XCB_EVENT_MASK_EXPOSURE .............. 32768\n"
-		"XCB_EVENT_MASK_VISIBILITY_CHANGE ..... 65536\n"
-		"XCB_EVENT_MASK_STRUCTURE_NOTIFY ...... 131072\n"
-		"XCB_EVENT_MASK_RESIZE_REDIRECT ....... 262144\n"
-		"XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY ... 524288\n"
-		"XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT . 1048576\n"
-		"XCB_EVENT_MASK_FOCUS_CHANGE .......... 2097152\n"
-		"XCB_EVENT_MASK_PROPERTY_CHANGE ....... 4194304\n"
-		"XCB_EVENT_MASK_COLOR_MAP_CHANGE ...... 8388608\n"
-		"XCB_EVENT_MASK_OWNER_GRAB_BUTTON ..... 16777216\n"
-		);
-}
-
-void
 register_events(xcb_window_t w, uint32_t m)
 {
 	uint32_t val[] = { m };
 
 	xcb_change_window_attributes(conn, w, XCB_CW_EVENT_MASK, val);
 	xcb_flush(conn);
-}
-
-int
-motherfuckingenterevent(xcb_generic_event_t *e)
-{
-	xcb_enter_notify_event_t *ee;
-
-	ee = (xcb_enter_notify_event_t*)e;
-	if (ee->detail == 0 && 
-			(ee->mode == XCB_NOTIFY_MODE_NORMAL ||
-			 ee->mode == XCB_NOTIFY_MODE_UNGRAB))
-		return 1;
-
-	return 0;
-}
-
-int
-motherfuckingfocusevent(xcb_generic_event_t *e)
-{
-	xcb_focus_in_event_t *ee;
-
-	ee = (xcb_focus_in_event_t*)e;
-	if (ee->detail != XCB_NOTIFY_DETAIL_VIRTUAL &&
-		ee->detail != XCB_NOTIFY_DETAIL_NONLINEAR_VIRTUAL &&
-		ee->detail != XCB_NOTIFY_DETAIL_POINTER &&
-		(ee->mode == XCB_NOTIFY_MODE_NORMAL ||
-		 ee->mode == XCB_NOTIFY_MODE_WHILE_GRABBED))
-		return 1;
-
-	return 0;
-}
-
-xcb_window_t
-get_window_id(xcb_generic_event_t *e)
-{
-	xcb_window_t wid;
-
-	wid = 0x0;
-	switch (e->response_type & ~0x80) {
-		case XCB_ENTER_NOTIFY:
-		case XCB_LEAVE_NOTIFY:
-			if (motherfuckingenterevent(e))
-				wid = ((xcb_enter_notify_event_t*)e)->event;
-			break;
-
-		case XCB_FOCUS_IN:
-		case XCB_FOCUS_OUT:
-			if (motherfuckingfocusevent(e))
-				wid = ((xcb_focus_in_event_t*)e)->event;
-			break;
-
-		case XCB_CREATE_NOTIFY:
-		case XCB_DESTROY_NOTIFY:
-			wid = ((xcb_create_notify_event_t*)e)->window;
-			break;
-
-		case XCB_UNMAP_NOTIFY:
-		case XCB_MAP_NOTIFY:
-			wid = ((xcb_map_notify_event_t*)e)->window;
-			break;
-
-		case XCB_BUTTON_PRESS:
-		case XCB_BUTTON_RELEASE:
-			wid = ((xcb_button_press_event_t*)e)->child;
-			break;
-
-		/*
-		 * MOTION_NOTIFY. Be careful with this one...
-		 *         It triggers ALOT! 
-		 *
-		 *          |\.---./|_
-	 	 *         (o)   (°) ''--._
-	 	 *         / .A--.         '\
-	 	 *         |'     `.         \
-	 	 *         /                 \
-		 *        /_;`|__\------(__/-\
-		 */
-		case XCB_MOTION_NOTIFY:
-			wid = ((xcb_motion_notify_event_t*)e)->event;
-			break;
-		/* please... handle me ... ;_;
-		case XCB_KEY_PRESS:
-		case XCB_KEY_RELEASE:
-		case XCB_KEYMAP_NOTIFY:
-		case XCB_EXPOSE:
-		case XCB_GRAPHICS_EXPOSURE:
-		case XCB_NO_EXPOSURE:
-		case XCB_VISIBILITY_NOTIFY:
-		case XCB_MAP_REQUEST:
-		case XCB_REPARENT_NOTIFY:
-		case XCB_CONFIGURE_NOTIFY:
-		case XCB_CONFIGURE_REQUEST:
-		case XCB_GRAVITY_NOTIFY:
-		case XCB_RESIZE_REQUEST:
-		case XCB_CIRCULATE_NOTIFY:
-		case XCB_CIRCULATE_REQUEST:
-		case XCB_PROPERTY_NOTIFY:
-		case XCB_SELECTION_CLEAR:
-		case XCB_SELECTION_REQUEST:
-		case XCB_SELECTION_NOTIFY:
-		case XCB_COLORMAP_NOTIFY:
-		case XCB_CLIENT_MESSAGE:
-		case XCB_MAPPING_NOTIFY:
-		*/
-		default:
-			return 0x0;
-	}
-
-	return wid;
 }
 
 void
@@ -255,6 +112,10 @@ handle_events(void)
 	xcb_window_t *wc, wid = 0;
 	xcb_generic_event_t *e;
 	xcb_create_notify_event_t *ec;
+	xcb_get_property_cookie_t cookie;
+	xcb_get_property_reply_t *reply;
+	xcb_atom_t property=XCB_ATOM_WM_NAME;
+	xcb_atom_t type=XCB_ATOM_STRING;
 
 	/*
 	 * We need to get notifed of window creations, no matter what, because
@@ -285,12 +146,28 @@ handle_events(void)
 			case XCB_CREATE_NOTIFY:
 				ec = (xcb_create_notify_event_t*)e;
 				register_events(ec->window, mask);
+				break;
+			case XCB_ENTER_NOTIFY:
+				wid = ((xcb_enter_notify_event_t*)e)->event;
+				break;
 			default:
-				wid = get_window_id(e);
+				wid=0x0;
+				break;
 		}
 
+		printf("wid: %d\n", wid);
+
 		if (wid > 0) {
-			printf("%d:0x%08x\n", e->response_type, wid);
+			cookie=xcb_get_property(conn, 0, wid, property, type, 0, 0);
+			printf("%p\n", cookie);
+			if((reply=xcb_get_property_reply(conn, cookie, NULL)))
+			{
+				int len=xcb_get_property_value_length(reply);
+				printf("%d\n", len);
+				if(len!=0)
+					printf("%ld:%.*s\n", time(NULL), len, (char*)xcb_get_property_value(reply));
+				free(reply);
+			}
 			fflush(stdout);
 		}
 
@@ -301,19 +178,6 @@ handle_events(void)
 int
 main (int argc, char **argv)
 {
-
-	char *argv0;
-
-	ARGBEGIN {
-		case 'l':
-			list_events();
-			exit(0);
-		case 'm':
-			  mask = strtoul(EARGF(usage(argv0)), NULL, 10);
-			  break;
-		default: usage(argv0);
-	} ARGEND;
-
 	init_xcb(&conn);
 	get_screen(conn, &scr);
 
