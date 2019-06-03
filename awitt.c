@@ -1,167 +1,107 @@
+/* See LICENSE file for copyright and license details. */
+
+#include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <err.h>
-#include <getopt.h>
+#include <string.h>
 #include <time.h>
+#include <unistd.h> /* TODO: isn't this platform independent? */
 #include <xcb/xcb.h>
 
-#include "arg.h"
+#define MIN(a, b)	((a) < (b) ? (a) : (b))
 
 static xcb_connection_t *conn;
-static xcb_screen_t *scr;
-static uint32_t mask = XCB_EVENT_MASK_NO_EVENT
-                     | XCB_EVENT_MASK_FOCUS_CHANGE
-		     | XCB_EVENT_MASK_ENTER_WINDOW
-                     ;
 
 void init_xcb(xcb_connection_t **);
 void kill_xcb(xcb_connection_t **);
-void get_screen(xcb_connection_t*, xcb_screen_t**);
-int get_windows(xcb_connection_t*, xcb_window_t, xcb_window_t**);
-void usage(char*);
-void list_events(void);
-void handle_events(void);
-void register_events(xcb_window_t, uint32_t);
+static xcb_window_t focus_window(void);
 
-void
-init_xcb(xcb_connection_t **con)
+void init_xcb(xcb_connection_t **con)
 {
 	*con = xcb_connect(NULL, NULL);
 	if (xcb_connection_has_error(*con))
 		errx(1, "unable connect to the X server");
 }
 
-void
-kill_xcb(xcb_connection_t **con)
+void kill_xcb(xcb_connection_t **con)
 {
 	if (*con)
 		xcb_disconnect(*con);
 }
 
-void
-get_screen(xcb_connection_t *con, xcb_screen_t **scr)
+static xcb_window_t focus_window(void)
 {
-	*scr = xcb_setup_roots_iterator(xcb_get_setup(con)).data;
-	if (*scr == NULL)
-		errx(1, "unable to retrieve screen informations");
-}
+	xcb_window_t w = 0;
+	xcb_get_input_focus_cookie_t c;
+	xcb_get_input_focus_reply_t *r;
 
-int
-get_windows(xcb_connection_t *con, xcb_window_t w, xcb_window_t **l)
-{
-	int childnum = 0;
-	xcb_query_tree_cookie_t c;
-	xcb_query_tree_reply_t *r;
-
-	c = xcb_query_tree(con, w);
-	r = xcb_query_tree_reply(con, c, NULL);
+	c = xcb_get_input_focus(conn);
+	r = xcb_get_input_focus_reply(conn, c, NULL);
 	if (r == NULL)
-		errx(1, "0x%08x: no such window", w);
+		errx(1, "xcb_get_input_focus");
 
-	*l = xcb_query_tree_children(r);
-
-	childnum = r->children_len;
+	w = r->focus;
 	free(r);
 
-	return childnum;
-}
+	if (w == XCB_NONE || w == XCB_INPUT_FOCUS_POINTER_ROOT)
+		errx(1, "focus not set");
 
-void
-usage(char *name)
-{
-	fprintf(stderr, "usage: %s [-l] [-m <mask>]\n", name);
-	exit(1);
-}
-
-void
-register_events(xcb_window_t w, uint32_t m)
-{
-	uint32_t val[] = { m };
-
-	xcb_change_window_attributes(conn, w, XCB_CW_EVENT_MASK, val);
-	xcb_flush(conn);
-}
-
-void
-handle_events(void)
-{
-	int i, wn;
-	xcb_window_t *wc, wid = 0;
-	xcb_generic_event_t *e;
-	xcb_create_notify_event_t *ec;
-	xcb_get_property_cookie_t cookie;
-	xcb_get_property_reply_t *reply;
-	xcb_atom_t property=XCB_ATOM_WM_NAME;
-	xcb_atom_t type=XCB_ATOM_STRING;
-
-	/*
-	 * We need to get notifed of window creations, no matter what, because
-	 * we need to register the event mask on all newly created windows
-	 */
-	register_events(scr->root, XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY);
-
-	if (mask & XCB_EVENT_MASK_BUTTON_PRESS) {
-		xcb_grab_button(conn, 0, scr->root,
-		                XCB_EVENT_MASK_BUTTON_PRESS |
-		                XCB_EVENT_MASK_BUTTON_RELEASE,
-		                XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC,
-		                scr->root, XCB_NONE, 1, XCB_NONE);
-	}
-
-	/* register the events on all mapped windows */
-	wn = get_windows(conn, scr->root, &wc);
-	for (i=0; i<wn; i++)
-		register_events(wc[i], mask);
-
-	xcb_flush(conn);
-
-	for(;;) {
-		e = xcb_wait_for_event(conn);
-
-		switch (e->response_type & ~0x80)
-		{
-			/* Find a way to fix focusing */
-			/*
-			case XCB_FOCUS_IN:
-				wid = ((xcb_focus_in_event_t*)e)->event;
-				break;
-			*/
-			case XCB_ENTER_NOTIFY:
-				wid=((xcb_enter_notify_event_t*)e)->event;
-				break;
-			case XCB_LEAVE_NOTIFY:
-				wid=((xcb_leave_notify_event_t*)e)->event;
-				break;
-			default:
-				wid=0x0;
-				break;
-		}
-
-		if (wid > 0) {
-			cookie=xcb_get_property(conn, 0, wid, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 32);
-			if((reply=xcb_get_property_reply(conn, cookie, NULL)))
-			{
-				int len=xcb_get_property_value_length(reply);
-				if(len!=0)
-					printf("%ld:%.*s\n", time(NULL), len, (char*)xcb_get_property_value(reply));
-				free(reply);
-			}
-			fflush(stdout);
-		}
-
-		free(e);
-	}
+	return w;
 }
 
 int
-main (int argc, char **argv)
+main(int argc, char **argv)
 {
-	init_xcb(&conn);
-	get_screen(conn, &scr);
+	size_t oldlen=0, len;
+	char* oldtitle=NULL, * newtitle;
+	time_t spent=0;
+	xcb_window_t wid=0;
+	xcb_get_property_reply_t* reply;
+	xcb_get_property_cookie_t cookie;
 
-	handle_events();
+	init_xcb(&conn);
+
+	for(;;)
+	{
+		wid=focus_window();
+		cookie=xcb_get_property(conn, 0, wid, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 32L);
+		reply=xcb_get_property_reply(conn, cookie, NULL);
+
+		if(reply!=NULL)
+		{
+			len=xcb_get_property_value_length(reply);
+			newtitle=(char*)xcb_get_property_value(reply);
+
+			/*
+				On the occasion that oldtitle has content
+				and newtitle is empty OR newtitle is
+				now not empty and oldtitle is empty OR
+				newtitle and oldtitle are both not empty
+				and have different content
+			*/
+
+			if(!oldlen||(!len&&oldlen!=1)||(len&&oldlen==1)||
+			  (len&&oldlen!=1&&strncmp(newtitle, oldtitle, MIN(len+1, oldlen))))
+			{
+				if(oldtitle!=NULL)
+					printf("%ld:%ld:%s\n", time(NULL), spent, oldtitle);
+
+				free(oldtitle);
+				oldtitle=calloc(len+1, sizeof(char));
+				strncpy(oldtitle, newtitle, len);
+				oldtitle[len]='\0';
+				oldlen=len+1;
+				spent=0;
+			}
+		}
+
+		free(reply);
+		spent++;
+		sleep(1);
+	}
+
+	free(oldtitle);
 
 	kill_xcb(&conn);
-
 	return 0;
 }

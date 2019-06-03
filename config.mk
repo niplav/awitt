@@ -4,8 +4,8 @@ CC=cc
 AR=ar
 RANLIB=ranlib
 
-CFLAGS=-Wall -Wextra -std=c89 -pedantic -O2
-LDFLAGS=-s -lxcb -lxcb-util
+CFLAGS=-Wall -Wextra -s -std=c89 -pedantic -O2
+LDFLAGS=-lxcb -lxcb-util
 
 BIN=awitt
 OBJ=$(BIN:=.o)
