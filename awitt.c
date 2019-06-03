@@ -10,31 +10,8 @@
 static xcb_connection_t *conn;
 static xcb_screen_t *scr;
 static uint32_t mask = XCB_EVENT_MASK_NO_EVENT
-                     /* | XCB_EVENT_MASK_KEY_PRESS */
-                     /* | XCB_EVENT_MASK_KEY_RELEASE */
-                     /* | XCB_EVENT_MASK_BUTTON_PRESS */
-                     /* | XCB_EVENT_MASK_BUTTON_RELEASE */
-                     | XCB_EVENT_MASK_ENTER_WINDOW
-                     /* | XCB_EVENT_MASK_LEAVE_WINDOW */
-                     /* | XCB_EVENT_MASK_POINTER_MOTION */
-                     /* | XCB_EVENT_MASK_POINTER_MOTION_HINT */
-                     /* | XCB_EVENT_MASK_BUTTON_1_MOTION */
-                     /* | XCB_EVENT_MASK_BUTTON_2_MOTION */
-                     /* | XCB_EVENT_MASK_BUTTON_3_MOTION */
-                     /* | XCB_EVENT_MASK_BUTTON_4_MOTION */
-                     /* | XCB_EVENT_MASK_BUTTON_5_MOTION */
-                     /* | XCB_EVENT_MASK_BUTTON_MOTION */
-                     /* | XCB_EVENT_MASK_KEYMAP_STATE */
-                     /* | XCB_EVENT_MASK_EXPOSURE */
-                     /* | XCB_EVENT_MASK_VISIBILITY_CHANGE */
-                     /* | XCB_EVENT_MASK_STRUCTURE_NOTIFY */
-                     /* | XCB_EVENT_MASK_RESIZE_REDIRECT */
-                     /* | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY */
-                     /* | XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT */
-                     /* | XCB_EVENT_MASK_FOCUS_CHANGE */
-                     /* | XCB_EVENT_MASK_PROPERTY_CHANGE */
-                     /* | XCB_EVENT_MASK_COLOR_MAP_CHANGE */
-                     /* | XCB_EVENT_MASK_OWNER_GRAB_BUTTON */
+                     | XCB_EVENT_MASK_FOCUS_CHANGE
+		     | XCB_EVENT_MASK_ENTER_WINDOW
                      ;
 
 void init_xcb(xcb_connection_t **);
@@ -143,27 +120,28 @@ handle_events(void)
 
 		switch (e->response_type & ~0x80)
 		{
-			case XCB_CREATE_NOTIFY:
-				ec = (xcb_create_notify_event_t*)e;
-				register_events(ec->window, mask);
+			/* Find a way to fix focusing */
+			/*
+			case XCB_FOCUS_IN:
+				wid = ((xcb_focus_in_event_t*)e)->event;
 				break;
+			*/
 			case XCB_ENTER_NOTIFY:
-				wid = ((xcb_enter_notify_event_t*)e)->event;
+				wid=((xcb_enter_notify_event_t*)e)->event;
+				break;
+			case XCB_LEAVE_NOTIFY:
+				wid=((xcb_leave_notify_event_t*)e)->event;
 				break;
 			default:
 				wid=0x0;
 				break;
 		}
 
-		printf("wid: %d\n", wid);
-
 		if (wid > 0) {
-			cookie=xcb_get_property(conn, 0, wid, property, type, 0, 0);
-			printf("%p\n", cookie);
+			cookie=xcb_get_property(conn, 0, wid, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 32);
 			if((reply=xcb_get_property_reply(conn, cookie, NULL)))
 			{
 				int len=xcb_get_property_value_length(reply);
-				printf("%d\n", len);
 				if(len!=0)
 					printf("%ld:%.*s\n", time(NULL), len, (char*)xcb_get_property_value(reply));
 				free(reply);
