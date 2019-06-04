@@ -52,7 +52,7 @@ static xcb_window_t focus_window(void)
 int
 main(int argc, char **argv)
 {
-	size_t oldnlen=0, oldclen=0, nlen, clen;
+	size_t oldtlen=0, oldclen=0, tlen, clen;
 	char* oldtitle=NULL, * newtitle, * oldclass=NULL, * newclass;
 	time_t spent=0;
 	xcb_window_t wid=0;
@@ -73,7 +73,7 @@ main(int argc, char **argv)
 
 		if(nreply!=NULL&&creply!=NULL)
 		{
-			nlen=xcb_get_property_value_length(nreply);
+			tlen=xcb_get_property_value_length(nreply);
 			newtitle=(char*)xcb_get_property_value(nreply);
 
 			clen=xcb_get_property_value_length(creply);
@@ -88,19 +88,22 @@ main(int argc, char **argv)
 				Same for the class.
 			*/
 
-			if(!oldnlen||(!nlen&&oldnlen!=1)||(nlen&&oldnlen==1)||
-			  (nlen&&oldnlen!=1&&strncmp(newtitle, oldtitle, MIN(nlen+1, oldnlen)))||
+			/*printf("oldclass (%d): %s, newclass (%d): %.*s\n", oldclen, oldclass, clen, clen, newclass);*/
+			/*printf("oldtitle (%d): %s, newtitle (%d): %.*s\n", oldtlen, oldtitle, tlen, tlen, newtitle);*/
+
+			if(!oldtlen||(!tlen&&oldtlen!=1)||(tlen&&oldtlen==1)||
+			  (tlen&&oldtlen!=1&&strncmp(newtitle, oldtitle, MIN(tlen+1, oldtlen)))||
 			   !oldclen||(!clen&&oldclen!=1)||(clen&&oldclen==1)||
 			  (clen&&oldclen!=1&&strncmp(newclass, oldclass, MIN(clen+1, oldclen))))
 			{
-				if(oldtitle!=NULL)
+				if(oldtitle!=NULL&&(oldtlen>1||oldclen>1))
 					printf("%ld:%ld:%s:%s\n", time(NULL), spent, oldclass, oldtitle);
 
 				free(oldtitle);
-				oldtitle=calloc(nlen+1, sizeof(char));
-				strncpy(oldtitle, newtitle, nlen);
-				oldtitle[nlen]='\0';
-				oldnlen=nlen+1;
+				oldtitle=calloc(tlen+1, sizeof(char));
+				strncpy(oldtitle, newtitle, tlen);
+				oldtitle[tlen]='\0';
+				oldtlen=tlen+1;
 
 				free(oldclass);
 				oldclass=calloc(clen+1, sizeof(char));
