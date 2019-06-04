@@ -52,55 +52,74 @@ static xcb_window_t focus_window(void)
 int
 main(int argc, char **argv)
 {
-	size_t oldlen=0, len;
-	char* oldtitle=NULL, * newtitle;
+	size_t oldnlen=0, oldclen=0, nlen, clen;
+	char* oldtitle=NULL, * newtitle, * oldclass=NULL, * newclass;
 	time_t spent=0;
 	xcb_window_t wid=0;
-	xcb_get_property_reply_t* reply;
-	xcb_get_property_cookie_t cookie;
+	xcb_get_property_reply_t* nreply, * creply;
+	xcb_get_property_cookie_t ncookie, ccookie;
 
 	init_xcb(&conn);
 
 	for(;;)
 	{
 		wid=focus_window();
-		cookie=xcb_get_property(conn, 0, wid, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 32L);
-		reply=xcb_get_property_reply(conn, cookie, NULL);
 
-		if(reply!=NULL)
+		ncookie=xcb_get_property(conn, 0, wid, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 256L);
+		nreply=xcb_get_property_reply(conn, ncookie, NULL);
+
+		ccookie=xcb_get_property(conn, 0, wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 0, 256L);
+		creply=xcb_get_property_reply(conn, ccookie, NULL);
+
+		if(nreply!=NULL&&creply!=NULL)
 		{
-			len=xcb_get_property_value_length(reply);
-			newtitle=(char*)xcb_get_property_value(reply);
+			nlen=xcb_get_property_value_length(nreply);
+			newtitle=(char*)xcb_get_property_value(nreply);
+
+			clen=xcb_get_property_value_length(creply);
+			newclass=(char*)xcb_get_property_value(creply);
 
 			/*
 				On the occasion that oldtitle has content
 				and newtitle is empty OR newtitle is
 				now not empty and oldtitle is empty OR
 				newtitle and oldtitle are both not empty
-				and have different content
+				and have different content.
+				Same for the class.
 			*/
 
-			if(!oldlen||(!len&&oldlen!=1)||(len&&oldlen==1)||
-			  (len&&oldlen!=1&&strncmp(newtitle, oldtitle, MIN(len+1, oldlen))))
+			if(!oldnlen||(!nlen&&oldnlen!=1)||(nlen&&oldnlen==1)||
+			  (nlen&&oldnlen!=1&&strncmp(newtitle, oldtitle, MIN(nlen+1, oldnlen)))||
+			   !oldclen||(!clen&&oldclen!=1)||(clen&&oldclen==1)||
+			  (clen&&oldclen!=1&&strncmp(newclass, oldclass, MIN(clen+1, oldclen))))
 			{
 				if(oldtitle!=NULL)
-					printf("%ld:%ld:%s\n", time(NULL), spent, oldtitle);
+					printf("%ld:%ld:%s:%s\n", time(NULL), spent, oldclass, oldtitle);
 
 				free(oldtitle);
-				oldtitle=calloc(len+1, sizeof(char));
-				strncpy(oldtitle, newtitle, len);
-				oldtitle[len]='\0';
-				oldlen=len+1;
+				oldtitle=calloc(nlen+1, sizeof(char));
+				strncpy(oldtitle, newtitle, nlen);
+				oldtitle[nlen]='\0';
+				oldnlen=nlen+1;
+
+				free(oldclass);
+				oldclass=calloc(clen+1, sizeof(char));
+				strncpy(oldclass, newclass, clen);
+				oldclass[clen]='\0';
+				oldclen=clen+1;
+
 				spent=0;
 			}
 		}
 
-		free(reply);
+		free(nreply);
+		free(creply);
 		spent++;
 		sleep(1);
 	}
 
 	free(oldtitle);
+	free(oldclass);
 
 	kill_xcb(&conn);
 	return 0;
