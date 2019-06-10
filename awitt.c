@@ -97,7 +97,10 @@ main(int argc, char **argv)
 			  (clen&&oldclen!=1&&strncmp(newclass, oldclass, MIN(clen+1, oldclen))))
 			{
 				if(oldtitle!=NULL&&(oldtlen>1||oldclen>1))
+				{
 					printf("%ld:%ld:%s:%s\n", time(NULL), spent, oldclass, oldtitle);
+					fflush(stdout);
+				}
 
 				free(oldtitle);
 				oldtitle=calloc(tlen+1, sizeof(char));
