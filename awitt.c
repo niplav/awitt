@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h> /* TODO: isn't this platform independent? */
+#include <unistd.h> /* TODO: isn't sleep() platform independent? */
 #include <xcb/xcb.h>
 
 #define MIN(a, b)	((a) < (b) ? (a) : (b))
@@ -80,6 +80,13 @@ main(int argc, char **argv)
 			newclass=(char*)xcb_get_property_value(creply);
 
 			/*
+				For some reason inexplicable to me right now,
+				clen is not reset. This is a hack around that.
+			*/
+
+			clen=strnlen(newclass, clen);
+
+			/*
 				On the occasion that oldtitle has content
 				and newtitle is empty OR newtitle is
 				now not empty and oldtitle is empty OR
@@ -88,13 +95,10 @@ main(int argc, char **argv)
 				Same for the class.
 			*/
 
-			/*printf("oldclass (%d): %s, newclass (%d): %.*s\n", oldclen, oldclass, clen, clen, newclass);*/
-			/*printf("oldtitle (%d): %s, newtitle (%d): %.*s\n", oldtlen, oldtitle, tlen, tlen, newtitle);*/
-
 			if(!oldtlen||(!tlen&&oldtlen!=1)||(tlen&&oldtlen==1)||
-			  (tlen&&oldtlen!=1&&strncmp(newtitle, oldtitle, MIN(tlen+1, oldtlen)))||
+			  (tlen&&oldtlen!=1&&strncmp(newtitle, oldtitle, MIN(tlen, oldtlen-1)))||
 			   !oldclen||(!clen&&oldclen!=1)||(clen&&oldclen==1)||
-			  (clen&&oldclen!=1&&strncmp(newclass, oldclass, MIN(clen+1, oldclen))))
+			  (clen&&oldclen!=1&&strncmp(newclass, oldclass, MIN(clen, oldclen-1))))
 			{
 				if(oldtitle!=NULL&&(oldtlen>1||oldclen>1))
 				{
