@@ -1,0 +1,59 @@
+.Dd June 14, 2019
+.Dt AWITT1
+.Os
+
+.Sh NAME
+.Nm awitt
+.Nd print title and class of focussed window when it changes
+
+.Sh SYNOPSIS
+.Nm
+
+.Sh DESCRIPTION
+.Nm
+watches the title and class of the currently focussed window. If one of
+those changes, it prints the the following, separated by colons to stdout:
+.Pp
+.Bl -tag -width 11n -compact
+.It • The current unix time, as reported by Xr time 1
+.It • The number of seconds spent in the previous window
+.It • The class of the previously focussed window
+.It • The title of the previously focussed window.
+.El
+.Pp
+That way, a user can analyze the output later to find out which windows
+she spent most of her time in. The changes in class and title are checked
+every second, so sub-second durations in windows are ignored.
+
+.Sh EXAMPLES
+Since
+.Nm
+doesn't take any arguments, it is simply invoked and starts
+logging:
+.Pp
+.Dl $ awitt
+.Dl 1560459757:2:st-256color:
+.Pp
+The real power lies in redirecting the output into a file and then
+analyzing it later in order to find out in which windows the most time
+was spent.
+.Pp
+.Dl $ awitt >title.log
+.Dl ^C
+.Dl $ awk -F: '$4~/an_anarchist_faq/ { a+=$2 } END { print(a/60) }' <windows.log
+.Dl 18.8167
+.Pp
+This shows that I have spent nearly 20 minutes reading An Anarchist FAQ
+during the time of logging the window titles.
+
+.Sh EXIT STATUS
+.Ex -std
+
+.Sh SEE ALSO
+.Xr arbtt 1 ,
+.Xr xprop 1 ,
+.Xr wname 1 ,
+.Xr lsw 1 .
+
+.Sh AUTHORS
+.An niplav Aq Mt niplav@posteo.net
