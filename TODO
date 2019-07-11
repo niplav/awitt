@@ -1,6 +1,2 @@
-Find out where all those frickin' titles have gone.
 Non-ascii 'üöä' is broken.
-How does dwm do it?
-Sometimes, when in a mupdf window, when the site is changed, the title
-is written every second. Find out why, and fix this.
-Add proper README and manpage.
+Add proper README.

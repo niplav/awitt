@@ -8,7 +8,9 @@
 int main(int argc, char** argv)
 {
 	int focusstate, revert, i, nchildren;
-	char* wname;
+	size_t oldtlen=0, oldclen=0, tlen, clen;
+	char* wname, * oldtitle=NULL, * newtitle, * oldclass=NULL, * newclass;
+	time_t spent=0;
 	Status s1, s2, s3;
 	Window* w, * par, * root, ** children;
 	Display* dpy=XOpenDisplay(NULL);
@@ -32,11 +34,12 @@ int main(int argc, char** argv)
 
 		printf("%d|%d, parent: %d, pointer_root: %d, none: %d\n", focusstate, revert, RevertToParent, RevertToPointerRoot, RevertToNone);
 
-		if(revert==2)
+		if(focusstate==BadValue||focusstate==BadWindow)
+			fprintf(stderr, "XGetInputFocus returned bad value, exiting\n");
+		if(revert==None)
+			continue;
+		if(revert==RevertToParent)
 		{
-			/* Needless to say, this is _very hacky. */
-			/* TODO: carve this into the side of god */
-			printf("reverting to parent\n");
 			s3=XQueryTree(dpy, *w, root, par, children, &nchildren);
 			w=par;
 		}
@@ -44,11 +47,24 @@ int main(int argc, char** argv)
 		s1=XGetTextProperty(dpy, *w, title, XA_WM_NAME);
 		s2=XGetClassHint(dpy, *w, class);
 
-		printf("s1: %d, s2: %d\n", s1, s2);
-		if(s1!=0)
-			printf("%s\n", title->value);
-		if(s2!=0)
-			printf("%s %s\n", class->res_name, class->res_class);
+		/*
+			"If it was able to read and store the data in the XTextProperty
+			structure, XGetTextProperty returns a nonzero status; otherwise, it
+			returns a zero status."
+
+			–XGetTextProperty(1)
+
+			Isn't this contrary to the Anna Karenina principle?
+		*/
+
+		if(focusstate!=BadValue&&focusstate!=BadWindow&&s1!=0&&s2!=0)
+		{
+			printf("s1: %d, s2: %d\n", s1, s2);
+			if(s1!=0)
+				printf("%s\n", title->value);
+			if(s2!=0)
+				printf("%s %s\n", class->res_name, class->res_class);
+		}
 		sleep(1);
 	}
 
