@@ -1,136 +1,186 @@
-/* See LICENSE file for copyright and license details. */
-
-#include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h> /* TODO: isn't sleep() platform independent? */
-#include <xcb/xcb.h>
+#include <unistd.h>
 
-#define MIN(a, b)	((a) < (b) ? (a) : (b))
+#include <X11/Xatom.h>
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
 
-static xcb_connection_t *conn;
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-void init_xcb(xcb_connection_t **);
-void kill_xcb(xcb_connection_t **);
-static xcb_window_t focus_window(void);
-
-void init_xcb(xcb_connection_t **con)
+typedef struct Winformation
 {
-	*con = xcb_connect(NULL, NULL);
-	if (xcb_connection_has_error(*con))
-		errx(1, "unable connect to the X server");
+	char* title;
+	char* class;
+	char* name;
+} Winformation;
+
+void focus_window_info(Display* d, Winformation* wi)
+{
+	int focusstate, revert;
+	unsigned int nchildren;
+
+	Status s=0;
+
+	Window* w=(Window*)calloc(1, sizeof(Window));
+	Window* root=(Window*)calloc(1, sizeof(Window));
+	Window** children=(Window**)calloc(16, sizeof(Window));
+
+	XTextProperty* title=(XTextProperty*)calloc(1, sizeof(XTextProperty));
+	XClassHint* class=(XClassHint*)XAllocClassHint();
+
+	focusstate=XGetInputFocus(d, w, &revert);
+
+	if(focusstate==BadValue||focusstate==BadWindow)
+	{
+		fprintf(stderr, "could not find focussed window\n");
+		w=NULL;
+	}
+	if(revert==None)
+	{
+		fprintf(stderr, "could not find focussed window\n");
+		w=NULL;
+	}
+	if(revert==RevertToParent&&w!=NULL)
+	{
+		Window* par=(Window*)calloc(1, sizeof(Window));
+		s=XQueryTree(d, *w, root, par, children, &nchildren);
+		free(w);
+		w=par;
+	}
+	if(s==BadWindow)
+		w=NULL;
+
+	wi->class[0]='\0';
+	wi->title[0]='\0';
+	wi->name[0]='\0';
+
+	if(w==NULL)
+		goto general_free;
+
+	/*
+		"If it was able to read and store the data in the XTextProperty
+		structure, XGetTextProperty returns a nonzero status; otherwise, it
+		returns a zero status."
+
+		–XGetTextProperty(1)
+
+		Isn't this contrary to the Anna Karenina principle?
+	*/
+
+	s=XGetTextProperty(d, *w, title, XA_WM_NAME);
+
+	if(s==0)
+		goto title_free;
+
+	strncpy(wi->title, (char*)title->value, title->nitems);
+	wi->title[title->nitems]='\0';
+
+	s=XGetClassHint(d, *w, class);
+
+	if(s==0)
+		goto class_free;
+
+	/* I don't find any information about whether res_name and
+	res_class are null-terminated. I'll just assume it, because it
+	works at the moment, but if segfault, look there. */
+
+	strncpy(wi->class, class->res_class, BUFSIZ-1);
+	strncpy(wi->name, class->res_name, BUFSIZ-1);
+
+class_free:
+
+	XFree(class->res_class);
+	XFree(class->res_name);
+	XFree(class);
+
+title_free:
+
+	free(title);
+
+general_free:
+
+	XFree(children);
+	free(w);
+	free(root);
 }
 
-void kill_xcb(xcb_connection_t **con)
-{
-	if (*con)
-		xcb_disconnect(*con);
-}
-
-static xcb_window_t focus_window(void)
-{
-	xcb_window_t w = 0;
-	xcb_get_input_focus_cookie_t c;
-	xcb_get_input_focus_reply_t *r;
-
-	c = xcb_get_input_focus(conn);
-	r = xcb_get_input_focus_reply(conn, c, NULL);
-	if (r == NULL)
-		errx(1, "xcb_get_input_focus");
-
-	w = r->focus;
-	free(r);
-
-	if (w == XCB_NONE || w == XCB_INPUT_FOCUS_POINTER_ROOT)
-		errx(1, "focus not set");
-
-	return w;
-}
-
-int
-main(int argc, char **argv)
+int main(int argc, char** argv)
 {
 	size_t oldtlen=0, oldclen=0, tlen, clen;
-	char* oldtitle=NULL, * newtitle, * oldclass=NULL, * newclass;
-	time_t spent=0;
-	xcb_window_t wid=0;
-	xcb_get_property_reply_t* nreply, * creply;
-	xcb_get_property_cookie_t ncookie, ccookie;
+	char * oldtitle=NULL, * oldclass=NULL;
 
-	init_xcb(&conn);
+	time_t spent=0;
+	Winformation w;
+	Display* dpy;
+
+	w.name=(char*)calloc(BUFSIZ, sizeof(char));
+	w.class=(char*)calloc(BUFSIZ, sizeof(char));
+	w.title=(char*)calloc(BUFSIZ, sizeof(char));
+
+	dpy=XOpenDisplay(NULL);
+
+	if(dpy==NULL)
+	{
+		fprintf(stderr, "%s: could not open display\n", argv[0]);
+		exit(1);
+	}
 
 	for(;;)
 	{
-		wid=focus_window();
+		sleep(1);
 
-		ncookie=xcb_get_property(conn, 0, wid, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 0, 256L);
-		nreply=xcb_get_property_reply(conn, ncookie, NULL);
+		focus_window_info(dpy, &w);
+		tlen=strlen(w.title);
+		clen=strlen(w.class);
 
-		ccookie=xcb_get_property(conn, 0, wid, XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 0, 256L);
-		creply=xcb_get_property_reply(conn, ccookie, NULL);
+		/*
+			On the occasion that oldtitle has content
+			and newtitle is empty OR newtitle is
+			now not empty and oldtitle is empty OR
+			newtitle and oldtitle are both not empty
+			and have different content.
+			Same for the class.
+		*/
 
-		if(nreply!=NULL&&creply!=NULL)
+		if(!oldtlen||(!tlen&&oldtlen!=1)||(tlen&&oldtlen==1)||
+		  (tlen&&oldtlen!=1&&strncmp(w.title, oldtitle, MIN(tlen, oldtlen-1)))||
+		   !oldclen||(!clen&&oldclen!=1)||(clen&&oldclen==1)||
+		  (clen&&oldclen!=1&&strncmp(w.class, oldclass, MIN(clen, oldclen-1))))
 		{
-			tlen=xcb_get_property_value_length(nreply);
-			newtitle=(char*)xcb_get_property_value(nreply);
-
-			clen=xcb_get_property_value_length(creply);
-			newclass=(char*)xcb_get_property_value(creply);
-
-			/*
-				For some reason inexplicable to me right now,
-				clen is not reset. This is a hack around that.
-			*/
-
-			clen=strnlen(newclass, clen);
-
-			/*
-				On the occasion that oldtitle has content
-				and newtitle is empty OR newtitle is
-				now not empty and oldtitle is empty OR
-				newtitle and oldtitle are both not empty
-				and have different content.
-				Same for the class.
-			*/
-
-			if(!oldtlen||(!tlen&&oldtlen!=1)||(tlen&&oldtlen==1)||
-			  (tlen&&oldtlen!=1&&strncmp(newtitle, oldtitle, MIN(tlen, oldtlen-1)))||
-			   !oldclen||(!clen&&oldclen!=1)||(clen&&oldclen==1)||
-			  (clen&&oldclen!=1&&strncmp(newclass, oldclass, MIN(clen, oldclen-1))))
+			if(oldtitle!=NULL&&(oldtlen>1||oldclen>1))
 			{
-				if(oldtitle!=NULL&&(oldtlen>1||oldclen>1))
-				{
-					printf("%ld:%ld:%s:%s\n", time(NULL), spent, oldclass, oldtitle);
-					fflush(stdout);
-				}
-
-				free(oldtitle);
-				oldtitle=calloc(tlen+1, sizeof(char));
-				strncpy(oldtitle, newtitle, tlen);
-				oldtitle[tlen]='\0';
-				oldtlen=tlen+1;
-
-				free(oldclass);
-				oldclass=calloc(clen+1, sizeof(char));
-				strncpy(oldclass, newclass, clen);
-				oldclass[clen]='\0';
-				oldclen=clen+1;
-
-				spent=0;
+				printf("%ld:%ld:%s:%s\n", time(NULL), spent, oldclass, oldtitle);
+				fflush(stdout);
 			}
+
+			free(oldtitle);
+			oldtitle=calloc(tlen+1, sizeof(char));
+			strncpy(oldtitle, w.title, tlen);
+			oldtitle[tlen]='\0';
+			oldtlen=tlen+1;
+
+			free(oldclass);
+			oldclass=calloc(clen+1, sizeof(char));
+			strncpy(oldclass, w.class, clen);
+			oldclass[clen]='\0';
+			oldclen=clen+1;
+
+			spent=0;
 		}
 
-		free(nreply);
-		free(creply);
 		spent++;
-		sleep(1);
 	}
 
+	XCloseDisplay(dpy);
+
+	free(w.name);
+	free(w.class);
+	free(w.title);
 	free(oldtitle);
 	free(oldclass);
 
-	kill_xcb(&conn);
 	return 0;
 }
