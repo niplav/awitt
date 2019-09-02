@@ -1,2 +1,4 @@
 Non-ascii 'üöä' is broken.
-Add proper README.
+Better error messages and handling.
+Also handle the window name?
+Add option that allows to change the time format printed (alternative version: ISO-8601)
