@@ -24,29 +24,47 @@ void focus_window_info(Display* d, Winformation* wi)
 
 	Status s=0;
 
+	Atom utf8string=XInternAtom(d, "UTF8_STRING", False);
+
 	Window* w=(Window*)calloc(1, sizeof(Window));
 	Window* root=(Window*)calloc(1, sizeof(Window));
-	Window** children=(Window**)calloc(16, sizeof(Window));
+	Window* children=NULL;
 
 	XTextProperty* title=(XTextProperty*)calloc(1, sizeof(XTextProperty));
 	XClassHint* class=(XClassHint*)XAllocClassHint();
 
+	if(w==NULL||root==NULL||title==NULL||class==NULL)
+	{
+		fprintf(stderr, "could not allocate memory, exiting\n");
+		exit(2);
+	}
+
+	puts("XGetInputFocus");
 	focusstate=XGetInputFocus(d, w, &revert);
 
-	if(focusstate==BadValue||focusstate==BadWindow)
-	{
-		fprintf(stderr, "could not find focussed window\n");
+	if(focusstate==BadValue||focusstate==BadWindow||revert==None)
 		w=NULL;
-	}
-	if(revert==None)
-	{
-		fprintf(stderr, "could not find focussed window\n");
-		w=NULL;
-	}
+	/*
+		TODO: What if this means that we should go up the tree
+		to find the focussed window and not just one step up
+		to the parent? Investigate.
+	*/
 	if(revert==RevertToParent&&w!=NULL)
 	{
 		Window* par=(Window*)calloc(1, sizeof(Window));
-		s=XQueryTree(d, *w, root, par, children, &nchildren);
+
+		if(par==NULL)
+		{
+			fprintf(stderr, "could not allocate memory, exiting\n");
+			exit(2);
+		}
+
+		puts("XQueryTree");
+		s=XQueryTree(d, *w, root, par, &children, &nchildren);
+
+		if(children!=NULL)
+			XFree(children);
+
 		free(w);
 		w=par;
 	}
@@ -70,14 +88,16 @@ void focus_window_info(Display* d, Winformation* wi)
 		Isn't this contrary to the Anna Karenina principle?
 	*/
 
+	puts("XGetTextProperty");
 	s=XGetTextProperty(d, *w, title, XA_WM_NAME);
 
-	if(s==0)
-		goto title_free;
+	if(s==0||title->value==NULL)
+		goto general_free;
 
 	strncpy(wi->title, (char*)title->value, title->nitems);
 	wi->title[title->nitems]='\0';
 
+	puts("XGetClassHint");
 	s=XGetClassHint(d, *w, class);
 
 	if(s==0)
@@ -94,15 +114,11 @@ class_free:
 
 	XFree(class->res_class);
 	XFree(class->res_name);
-	XFree(class);
-
-title_free:
-
-	free(title);
 
 general_free:
 
-	XFree(children);
+	XFree(class);
+	free(title);
 	free(w);
 	free(root);
 }
