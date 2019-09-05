@@ -39,7 +39,6 @@ void focus_window_info(Display* d, Winformation* wi)
 		exit(2);
 	}
 
-	puts("XGetInputFocus");
 	focusstate=XGetInputFocus(d, w, &revert);
 
 	if(focusstate==BadValue||focusstate==BadWindow||revert==None)
@@ -59,7 +58,6 @@ void focus_window_info(Display* d, Winformation* wi)
 			exit(2);
 		}
 
-		puts("XQueryTree");
 		s=XQueryTree(d, *w, root, par, &children, &nchildren);
 
 		if(children!=NULL)
@@ -88,7 +86,6 @@ void focus_window_info(Display* d, Winformation* wi)
 		Isn't this contrary to the Anna Karenina principle?
 	*/
 
-	puts("XGetTextProperty");
 	s=XGetTextProperty(d, *w, title, XA_WM_NAME);
 
 	if(s==0||title->value==NULL)
@@ -97,7 +94,6 @@ void focus_window_info(Display* d, Winformation* wi)
 	strncpy(wi->title, (char*)title->value, title->nitems);
 	wi->title[title->nitems]='\0';
 
-	puts("XGetClassHint");
 	s=XGetClassHint(d, *w, class);
 
 	if(s==0)
