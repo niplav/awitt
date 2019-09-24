@@ -2,3 +2,11 @@ Non-ascii 'üöä' is broken.
 Better error messages and handling.
 Also handle the window name?
 Add option that allows to change the time format printed (alternative version: ISO-8601)
+Sometimes it crashes with this error message:
+	X Error of failed request:  BadWindow (invalid Window parameter)
+	Major opcode of failed request:  20 (X_GetProperty)
+	Resource id in failed request:  0x1
+	Serial number of failed request:  607566
+	Current serial number in output stream:  607566
+Occurs if the focused window is closed before it can read
+the property.
