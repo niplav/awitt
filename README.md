@@ -2,9 +2,10 @@ Log window titles when they change
 ===================================
 
 awitt is a simple window title logger that can be used as a time tracker.
-It works quite similar to arbtt (albeit much simpler and more bare-bones),
-which means that it needs no manual entry of activities, but instead
-relies just on logging window class, title and time spent in the window.
+It works quite similar to [arbtt](https://arbtt.nomeata.de/) (albeit
+much simpler and more bare-bones), which means that it needs no manual
+entry of activities, but instead relies just on logging window class,
+title and time spent in the window.
 
 The most simple usage is simply piping the output into a file:
 
