@@ -99,7 +99,7 @@ void focus_window_info(Display* d, Winformation* wi)
 	if(s==0)
 		goto class_free;
 
-	/* I don't find any information about whether res_name and
+	/* I couldn't find any information about whether res_name and
 	res_class are null-terminated. I'll just assume it, because it
 	works at the moment, but if segfault, look there. */
 
@@ -149,11 +149,10 @@ int main(int argc, char** argv)
 		clen=strlen(w.class);
 
 		/*
-			On the occasion that oldtitle has content
-			and newtitle is empty OR newtitle is
-			now not empty and oldtitle is empty OR
-			newtitle and oldtitle are both not empty
-			and have different content.
+			On the occasion that oldtitle has content and
+			newtitle is empty OR newtitle is now not empty
+			and oldtitle is empty OR newtitle and oldtitle
+			are both not empty and have different content.
 			Same for the class.
 		*/
 
