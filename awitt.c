@@ -17,38 +17,38 @@ typedef struct Winformation
 	char* name;
 } Winformation;
 
-void focus_window_info(Display* d, Winformation* wi)
+void focus_window_info(Display* display, Winformation* window_info)
 {
 	int focusstate, revert;
 	unsigned int nchildren;
 
-	Status s=0;
+	Status title_status=0;
 
-	Atom utf8string=XInternAtom(d, "UTF8_STRING", False);
+	Atom net_wm_name = XInternAtom(display, "_NET_WM_NAME", False);
 
-	Window* w=(Window*)calloc(1, sizeof(Window));
+	Window* window=(Window*)calloc(1, sizeof(Window));
 	Window* root=(Window*)calloc(1, sizeof(Window));
 	Window* children=NULL;
 
 	XTextProperty* title=(XTextProperty*)calloc(1, sizeof(XTextProperty));
 	XClassHint* class=(XClassHint*)XAllocClassHint();
 
-	if(w==NULL||root==NULL||title==NULL||class==NULL)
+	if(window==NULL||root==NULL||title==NULL||class==NULL)
 	{
 		fprintf(stderr, "could not allocate memory, exiting\n");
 		exit(2);
 	}
 
-	focusstate=XGetInputFocus(d, w, &revert);
+	focusstate=XGetInputFocus(display, window, &revert);
 
 	if(focusstate==BadValue||focusstate==BadWindow||revert==None)
-		w=NULL;
+		window=NULL;
 	/*
 		TODO: What if this means that we should go up the tree
 		to find the focussed window and not just one step up
 		to the parent? Investigate.
 	*/
-	if(revert==RevertToParent&&w!=NULL)
+	if(revert==RevertToParent&&window!=NULL)
 	{
 		Window* par=(Window*)calloc(1, sizeof(Window));
 
@@ -58,22 +58,22 @@ void focus_window_info(Display* d, Winformation* wi)
 			exit(2);
 		}
 
-		s=XQueryTree(d, *w, root, par, &children, &nchildren);
+		title_status=XQueryTree(display, *window, root, par, &children, &nchildren);
 
 		if(children!=NULL)
 			XFree(children);
 
-		free(w);
-		w=par;
+		free(window);
+		window=par;
 	}
-	if(s==BadWindow)
-		w=NULL;
+	if(title_status==BadWindow)
+		window=NULL;
 
-	wi->class[0]='\0';
-	wi->title[0]='\0';
-	wi->name[0]='\0';
+	window_info->class[0]='\0';
+	window_info->title[0]='\0';
+	window_info->name[0]='\0';
 
-	if(w==NULL)
+	if(window==NULL)
 		goto general_free;
 
 	/*
@@ -86,28 +86,27 @@ void focus_window_info(Display* d, Winformation* wi)
 		Isn't this contrary to the Anna Karenina principle?
 	*/
 
-	s=XGetTextProperty(d, *w, title, XA_WM_NAME);
+	title_status=XGetTextProperty(display, *window, title, net_wm_name);
 
-	if(s==0||title->value==NULL)
+	if(title_status==0||title->value==NULL)
 		goto general_free;
 
-	strncpy(wi->title, (char*)title->value, title->nitems);
-	wi->title[title->nitems]='\0';
+	strncpy(window_info->title, (char*)title->value, title->nitems);
+	window_info->title[title->nitems]='\0';
 
-	s=XGetClassHint(d, *w, class);
+	title_status=XGetClassHint(display, *window, class);
 
-	if(s==0)
+	if(title_status==0)
 		goto class_free;
 
 	/* I couldn't find any information about whether res_name and
 	res_class are null-terminated. I'll just assume it, because it
 	works at the moment, but if segfault, look there. */
 
-	strncpy(wi->class, class->res_class, BUFSIZ-1);
-	strncpy(wi->name, class->res_name, BUFSIZ-1);
+	strncpy(window_info->class, class->res_class, BUFSIZ-1);
+	strncpy(window_info->name, class->res_name, BUFSIZ-1);
 
 class_free:
-
 	XFree(class->res_class);
 	XFree(class->res_name);
 
@@ -115,7 +114,7 @@ general_free:
 
 	XFree(class);
 	free(title);
-	free(w);
+	free(window);
 	free(root);
 }
 
@@ -125,12 +124,12 @@ int main(int argc, char** argv)
 	char * oldtitle=NULL, * oldclass=NULL;
 
 	time_t spent=0;
-	Winformation w;
+	Winformation window;
 	Display* dpy;
 
-	w.name=(char*)calloc(BUFSIZ, sizeof(char));
-	w.class=(char*)calloc(BUFSIZ, sizeof(char));
-	w.title=(char*)calloc(BUFSIZ, sizeof(char));
+	window.name=(char*)calloc(BUFSIZ, sizeof(char));
+	window.class=(char*)calloc(BUFSIZ, sizeof(char));
+	window.title=(char*)calloc(BUFSIZ, sizeof(char));
 
 	dpy=XOpenDisplay(NULL);
 
@@ -144,9 +143,9 @@ int main(int argc, char** argv)
 	{
 		sleep(1);
 
-		focus_window_info(dpy, &w);
-		tlen=strlen(w.title);
-		clen=strlen(w.class);
+		focus_window_info(dpy, &window);
+		tlen=strlen(window.title);
+		clen=strlen(window.class);
 
 		/*
 			On the occasion that oldtitle has content and
@@ -157,9 +156,9 @@ int main(int argc, char** argv)
 		*/
 
 		if(!oldtlen||(!tlen&&oldtlen!=1)||(tlen&&oldtlen==1)||
-		  (tlen&&oldtlen!=1&&strncmp(w.title, oldtitle, MIN(tlen, oldtlen-1)))||
+		  (tlen&&oldtlen!=1&&strncmp(window.title, oldtitle, MIN(tlen, oldtlen-1)))||
 		   !oldclen||(!clen&&oldclen!=1)||(clen&&oldclen==1)||
-		  (clen&&oldclen!=1&&strncmp(w.class, oldclass, MIN(clen, oldclen-1))))
+		  (clen&&oldclen!=1&&strncmp(window.class, oldclass, MIN(clen, oldclen-1))))
 		{
 			if(oldtitle!=NULL&&(oldtlen>1||oldclen>1))
 			{
@@ -169,13 +168,13 @@ int main(int argc, char** argv)
 
 			free(oldtitle);
 			oldtitle=calloc(tlen+1, sizeof(char));
-			strncpy(oldtitle, w.title, tlen);
+			strncpy(oldtitle, window.title, tlen);
 			oldtitle[tlen]='\0';
 			oldtlen=tlen+1;
 
 			free(oldclass);
 			oldclass=calloc(clen+1, sizeof(char));
-			strncpy(oldclass, w.class, clen);
+			strncpy(oldclass, window.class, clen);
 			oldclass[clen]='\0';
 			oldclen=clen+1;
 
@@ -187,9 +186,9 @@ int main(int argc, char** argv)
 
 	XCloseDisplay(dpy);
 
-	free(w.name);
-	free(w.class);
-	free(w.title);
+	free(window.name);
+	free(window.class);
+	free(window.title);
 	free(oldtitle);
 	free(oldclass);
 
